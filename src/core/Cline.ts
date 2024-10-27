@@ -41,6 +41,7 @@ import { formatResponse } from "./prompts/responses"
 import { addCustomInstructions, SYSTEM_PROMPT } from "./prompts/system"
 import { truncateHalfConversation } from "./sliding-window"
 import { ClineProvider, GlobalFileNames } from "./webview/ClineProvider"
+import { EmulatorFinder } from "../services/emulator/EmulatorFinder"
 import { showOmissionWarning } from "../integrations/editor/detect-omission"
 
 const cwd =
@@ -56,6 +57,7 @@ export class Cline {
 	api: ApiHandler
 	private terminalManager: TerminalManager
 	private urlContentFetcher: UrlContentFetcher
+	private emulatorFinder: EmulatorFinder
 	private didEditFile: boolean = false
 	customInstructions?: string
 	alwaysAllowReadOnly: boolean
@@ -95,10 +97,10 @@ export class Cline {
 		this.api = buildApiHandler(apiConfiguration)
 		this.terminalManager = new TerminalManager()
 		this.urlContentFetcher = new UrlContentFetcher(provider.context)
+		this.emulatorFinder = new EmulatorFinder(provider.context)
 		this.diffViewProvider = new DiffViewProvider(cwd)
 		this.customInstructions = customInstructions
 		this.alwaysAllowReadOnly = alwaysAllowReadOnly ?? false
-
 		if (historyItem) {
 			this.taskId = historyItem.id
 			this.resumeTaskFromHistory()
@@ -186,10 +188,10 @@ export class Cline {
 			const taskMessage = this.clineMessages[0] // first message is always the task say
 			const lastRelevantMessage =
 				this.clineMessages[
-					findLastIndex(
-						this.clineMessages,
-						(m) => !(m.ask === "resume_task" || m.ask === "resume_completed_task")
-					)
+				findLastIndex(
+					this.clineMessages,
+					(m) => !(m.ask === "resume_task" || m.ask === "resume_completed_task")
+				)
 				]
 			await this.providerRef.deref()?.updateTaskHistory({
 				id: this.taskId,
@@ -371,8 +373,7 @@ export class Cline {
 	async sayAndCreateMissingParamError(toolName: ToolUseName, paramName: string, relPath?: string) {
 		await this.say(
 			"error",
-			`Cline tried to use ${toolName}${
-				relPath ? ` for '${relPath.toPosix()}'` : ""
+			`Cline tried to use ${toolName}${relPath ? ` for '${relPath.toPosix()}'` : ""
 			} without value for required parameter '${paramName}'. Retrying...`
 		)
 		return formatResponse.toolError(formatResponse.missingToolParameterError(paramName))
@@ -721,8 +722,7 @@ export class Cline {
 			return [
 				true,
 				formatResponse.toolResult(
-					`Command is still running in the user's terminal.${
-						result.length > 0 ? `\nHere's the output so far:\n${result}` : ""
+					`Command is still running in the user's terminal.${result.length > 0 ? `\nHere's the output so far:\n${result}` : ""
 					}\n\nThe user provided the following feedback:\n<feedback>\n${userFeedback.text}\n</feedback>`,
 					userFeedback.images
 				),
@@ -734,8 +734,7 @@ export class Cline {
 		} else {
 			return [
 				false,
-				`Command is still running in the user's terminal.${
-					result.length > 0 ? `\nHere's the output so far:\n${result}` : ""
+				`Command is still running in the user's terminal.${result.length > 0 ? `\nHere's the output so far:\n${result}` : ""
 				}\n\nYou will be updated on the terminal status and new output in the future.`,
 			]
 		}
@@ -874,15 +873,16 @@ export class Cline {
 						case "write_to_file":
 							return `[${block.name} for '${block.params.path}']`
 						case "search_files":
-							return `[${block.name} for '${block.params.regex}'${
-								block.params.file_pattern ? ` in '${block.params.file_pattern}'` : ""
-							}]`
+							return `[${block.name} for '${block.params.regex}'${block.params.file_pattern ? ` in '${block.params.file_pattern}'` : ""
+								}]`
 						case "list_files":
 							return `[${block.name} for '${block.params.path}']`
 						case "list_code_definition_names":
 							return `[${block.name} for '${block.params.path}']`
 						case "inspect_site":
 							return `[${block.name} for '${block.params.url}']`
+						case "inspect_emulator":
+							return `[${block.name}]`
 						case "ask_followup_question":
 							return `[${block.name} for '${block.params.question}']`
 						case "attempt_completion":
@@ -1040,7 +1040,7 @@ export class Cline {
 							if (block.partial) {
 								// update gui message
 								const partialMessage = JSON.stringify(sharedMessageProps)
-								await this.ask("tool", partialMessage, block.partial).catch(() => {})
+								await this.ask("tool", partialMessage, block.partial).catch(() => { })
 								// update editor
 								if (!this.diffViewProvider.isEditing) {
 									// open the editor and prepare to stream content in
@@ -1070,7 +1070,7 @@ export class Cline {
 								if (!this.diffViewProvider.isEditing) {
 									// show gui message before showing edit animation
 									const partialMessage = JSON.stringify(sharedMessageProps)
-									await this.ask("tool", partialMessage, true).catch(() => {}) // sending true for partial even though it's not a partial, this shows the edit row before the content is streamed into the editor
+									await this.ask("tool", partialMessage, true).catch(() => { }) // sending true for partial even though it's not a partial, this shows the edit row before the content is streamed into the editor
 									await this.diffViewProvider.open(relPath)
 								}
 								await this.diffViewProvider.update(newContent, true)
@@ -1083,10 +1083,10 @@ export class Cline {
 									content: fileExists ? undefined : newContent,
 									diff: fileExists
 										? formatResponse.createPrettyPatch(
-												relPath,
-												this.diffViewProvider.originalContent,
-												newContent
-										  )
+											relPath,
+											this.diffViewProvider.originalContent,
+											newContent
+										)
 										: undefined,
 								} satisfies ClineSayTool)
 								const didApprove = await askApproval("tool", completeMessage)
@@ -1145,7 +1145,7 @@ export class Cline {
 								if (this.alwaysAllowReadOnly) {
 									await this.say("tool", partialMessage, undefined, block.partial)
 								} else {
-									await this.ask("tool", partialMessage, block.partial).catch(() => {})
+									await this.ask("tool", partialMessage, block.partial).catch(() => { })
 								}
 								break
 							} else {
@@ -1195,7 +1195,7 @@ export class Cline {
 								if (this.alwaysAllowReadOnly) {
 									await this.say("tool", partialMessage, undefined, block.partial)
 								} else {
-									await this.ask("tool", partialMessage, block.partial).catch(() => {})
+									await this.ask("tool", partialMessage, block.partial).catch(() => { })
 								}
 								break
 							} else {
@@ -1243,7 +1243,7 @@ export class Cline {
 								if (this.alwaysAllowReadOnly) {
 									await this.say("tool", partialMessage, undefined, block.partial)
 								} else {
-									await this.ask("tool", partialMessage, block.partial).catch(() => {})
+									await this.ask("tool", partialMessage, block.partial).catch(() => { })
 								}
 								break
 							} else {
@@ -1296,7 +1296,7 @@ export class Cline {
 								if (this.alwaysAllowReadOnly) {
 									await this.say("tool", partialMessage, undefined, block.partial)
 								} else {
-									await this.ask("tool", partialMessage, block.partial).catch(() => {})
+									await this.ask("tool", partialMessage, block.partial).catch(() => { })
 								}
 								break
 							} else {
@@ -1335,9 +1335,11 @@ export class Cline {
 					}
 					case "inspect_site": {
 						const url: string | undefined = block.params.url
+						const resolution: string | undefined = block.params.resolution
 						const sharedMessageProps: ClineSayTool = {
 							tool: "inspectSite",
 							path: removeClosingTag("url", url),
+							resolution: removeClosingTag("resolution", resolution),
 						}
 						try {
 							if (block.partial) {
@@ -1345,7 +1347,7 @@ export class Cline {
 								if (this.alwaysAllowReadOnly) {
 									await this.say("tool", partialMessage, undefined, block.partial)
 								} else {
-									await this.ask("tool", partialMessage, block.partial).catch(() => {})
+									await this.ask("tool", partialMessage, block.partial).catch(() => { })
 								}
 								break
 							} else {
@@ -1374,7 +1376,7 @@ export class Cline {
 									logs: string
 								}
 								try {
-									result = await this.urlContentFetcher.urlToScreenshotAndLogs(url)
+									result = await this.urlContentFetcher.urlToScreenshotAndLogs(url, resolution)
 								} finally {
 									await this.urlContentFetcher.closeBrowser()
 								}
@@ -1383,8 +1385,7 @@ export class Cline {
 
 								pushToolResult(
 									formatResponse.toolResult(
-										`The site has been visited, with console logs captured and a screenshot taken for your analysis.\n\nConsole logs:\n${
-											logs || "(No logs)"
+										`The site has been visited, with console logs captured and a screenshot taken for your analysis.${resolution ? ` The screenshot was taken with a resolution of ${resolution}.` : ''}\n\nConsole logs:\n${logs || "(No logs)"
 										}`,
 										[screenshot]
 									)
@@ -1396,12 +1397,56 @@ export class Cline {
 							break
 						}
 					}
+					case "inspect_emulator": {
+						const sharedMessageProps: ClineSayTool = {
+							tool: "inspectEmulator",
+						}
+						try {
+							if (block.partial) {
+								const partialMessage = JSON.stringify(sharedMessageProps)
+								if (this.alwaysAllowReadOnly) {
+									await this.say("tool", partialMessage, undefined, block.partial)
+								} else {
+									await this.ask("tool", partialMessage, block.partial).catch(() => { })
+								}
+								break
+							} else {
+								this.consecutiveMistakeCount = 0
+								const completeMessage = JSON.stringify(sharedMessageProps)
+								if (this.alwaysAllowReadOnly) {
+									await this.say("tool", completeMessage, undefined, false)
+								} else {
+									const didApprove = await askApproval("tool", completeMessage)
+									if (!didApprove) {
+										break
+									}
+								}
+
+								await this.say("inspect_emulator_result", "") // no result, starts the loading spinner waiting for result
+
+								const { screenshot } = await this.emulatorFinder.findAndCaptureEmulator()
+
+								await this.say("inspect_emulator_result", "", [screenshot])
+
+								pushToolResult(
+									formatResponse.toolResult(
+										`An emulator has been located, and a screenshot has been taken for your analysis.`,
+										[screenshot]
+									)
+								)
+								break
+							}
+						} catch (error) {
+							await handleError("inspecting emulator", error)
+							break
+						}
+					}
 					case "execute_command": {
 						const command: string | undefined = block.params.command
 						try {
 							if (block.partial) {
 								await this.ask("command", removeClosingTag("command", command), block.partial).catch(
-									() => {}
+									() => { }
 								)
 								break
 							} else {
@@ -1435,7 +1480,7 @@ export class Cline {
 						try {
 							if (block.partial) {
 								await this.ask("followup", removeClosingTag("question", question), block.partial).catch(
-									() => {}
+									() => { }
 								)
 								break
 							} else {
@@ -1494,7 +1539,7 @@ export class Cline {
 											"command",
 											removeClosingTag("command", command),
 											block.partial
-										).catch(() => {})
+										).catch(() => { })
 									} else {
 										// last message is completion_result
 										// we have command string, which means we have the result as well, so finish it (doesnt have to exist yet)
@@ -1508,7 +1553,7 @@ export class Cline {
 											"command",
 											removeClosingTag("command", command),
 											block.partial
-										).catch(() => {})
+										).catch(() => { })
 									}
 								} else {
 									// no command, still outputting partial result
@@ -1734,10 +1779,9 @@ export class Cline {
 							type: "text",
 							text:
 								assistantMessage +
-								`\n\n[${
-									cancelReason === "streaming_failed"
-										? "Response interrupted by API Error"
-										: "Response interrupted by user"
+								`\n\n[${cancelReason === "streaming_failed"
+									? "Response interrupted by API Error"
+									: "Response interrupted by user"
 								}]`,
 						},
 					],
@@ -1982,7 +2026,7 @@ export class Cline {
 			await pWaitFor(() => busyTerminals.every((t) => !this.terminalManager.isProcessHot(t.id)), {
 				interval: 100,
 				timeout: 15_000,
-			}).catch(() => {})
+			}).catch(() => { })
 		}
 
 		// we want to get diagnostics AFTER terminal cools down for a few reasons: terminal could be scaffolding a project, dev servers (compilers like webpack) will first re-compile and then send diagnostics, etc
