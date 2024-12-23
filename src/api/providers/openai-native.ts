@@ -11,6 +11,13 @@ import {
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
 
+// Extended type for o1 model parameters
+type O1ChatCompletionParams = {
+	model: string
+	messages: OpenAI.Chat.ChatCompletionMessageParam[]
+	reasoning_effort?: "low" | "medium" | "high"
+}
+
 export class OpenAiNativeHandler implements ApiHandler {
 	private options: ApiHandlerOptions
 	private client: OpenAI
@@ -24,9 +31,29 @@ export class OpenAiNativeHandler implements ApiHandler {
 
 	async *createMessage(systemPrompt: string, messages: Anthropic.Messages.MessageParam[]): ApiStream {
 		switch (this.getModel().id) {
+			case "o1": {
+				// o1 supports system messages and reasoning_effort parameter
+				const params = {
+					model: this.getModel().id,
+					messages: [{ role: "system", content: systemPrompt }, ...convertToOpenAiMessages(messages)],
+					reasoning_effort: this.options.reasoningEffort || "medium", // Use configured value or default to medium
+				} as any
+
+				const response = await this.client.chat.completions.create(params)
+				yield {
+					type: "text",
+					text: response.choices[0]?.message.content || "",
+				}
+				yield {
+					type: "usage",
+					inputTokens: response.usage?.prompt_tokens || 0,
+					outputTokens: response.usage?.completion_tokens || 0,
+				}
+				break
+			}
 			case "o1-preview":
 			case "o1-mini": {
-				// o1 doesnt support streaming, non-1 temp, or system prompt
+				// o1-preview and o1-mini don't support streaming, non-1 temp, or system prompt
 				const response = await this.client.chat.completions.create({
 					model: this.getModel().id,
 					messages: [{ role: "user", content: systemPrompt }, ...convertToOpenAiMessages(messages)],

@@ -33,6 +33,7 @@ export interface ApiHandlerOptions {
 	geminiApiKey?: string
 	openAiNativeApiKey?: string
 	azureApiVersion?: string
+	reasoningEffort?: "low" | "medium" | "high" // o1 model parameter
 }
 
 export type ApiConfiguration = ApiHandlerOptions & {
@@ -309,6 +310,14 @@ export type OpenAiNativeModelId = keyof typeof openAiNativeModels
 export const openAiNativeDefaultModelId: OpenAiNativeModelId = "gpt-4o"
 export const openAiNativeModels = {
 	// don't support tool use yet
+	o1: {
+		maxTokens: 100_000,
+		contextWindow: 200_000,
+		supportsImages: true,
+		supportsPromptCache: false,
+		inputPrice: 15,
+		outputPrice: 60,
+	},
 	"o1-preview": {
 		maxTokens: 32_768,
 		contextWindow: 128_000,
