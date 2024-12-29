@@ -8,6 +8,7 @@ export type ApiProvider =
 	| "lmstudio"
 	| "gemini"
 	| "openai-native"
+	| "deepseek"
 
 export interface ApiHandlerOptions {
 	apiModelId?: string
@@ -33,6 +34,8 @@ export interface ApiHandlerOptions {
 	geminiApiKey?: string
 	openAiNativeApiKey?: string
 	azureApiVersion?: string
+	deepSeekApiKey?: string
+	deepSeekBaseUrl?: string
 }
 
 export type ApiConfiguration = ApiHandlerOptions & {
@@ -46,13 +49,55 @@ export interface ModelInfo {
 	contextWindow?: number
 	supportsImages?: boolean
 	supportsComputerUse?: boolean
-	supportsPromptCache: boolean // this value is hardcoded for now
+	supportsPromptCache: boolean
 	inputPrice?: number
 	outputPrice?: number
 	cacheWritesPrice?: number
 	cacheReadsPrice?: number
 	description?: string
 }
+
+// DeepSeek pricing transition date: 2025-02-08 16:00 UTC
+const DEEPSEEK_PRICE_TRANSITION = new Date("2025-02-08T16:00:00Z")
+
+export function getDeepSeekPricing(): {
+	inputPrice: number
+	outputPrice: number
+	cacheWritesPrice: number
+	cacheReadsPrice: number
+} {
+	const now = new Date()
+	if (now < DEEPSEEK_PRICE_TRANSITION) {
+		return {
+			inputPrice: 0.14,
+			outputPrice: 0.28,
+			cacheWritesPrice: 0.14,
+			cacheReadsPrice: 0.014,
+		}
+	}
+	return {
+		inputPrice: 0.27,
+		outputPrice: 1.1,
+		cacheWritesPrice: 0.27,
+		cacheReadsPrice: 0.07,
+	}
+}
+
+// DeepSeek
+export type DeepSeekModelId = keyof typeof deepSeekModels
+export const deepSeekDefaultModelId: DeepSeekModelId = "deepseek-chat"
+export const deepSeekModels = {
+	"deepseek-chat": {
+		maxTokens: 8192,
+		contextWindow: 64_000,
+		supportsImages: false,
+		supportsComputerUse: false,
+		supportsPromptCache: true,
+		...getDeepSeekPricing(),
+		description:
+			"DeepSeek V3 model with strong general capabilities and code abilities. Supports function calling and context caching.",
+	},
+} as const satisfies Record<string, ModelInfo>
 
 // Anthropic
 // https://docs.anthropic.com/en/docs/about-claude/models

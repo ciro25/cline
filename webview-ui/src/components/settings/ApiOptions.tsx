@@ -17,6 +17,8 @@ import {
 	azureOpenAiDefaultApiVersion,
 	bedrockDefaultModelId,
 	bedrockModels,
+	deepSeekDefaultModelId,
+	deepSeekModels,
 	geminiDefaultModelId,
 	geminiModels,
 	openAiModelInfoSaneDefaults,
@@ -128,6 +130,7 @@ const ApiOptions = ({ showModelOptions, apiErrorMessage, modelIdErrorMessage }: 
 					style={{ minWidth: 130, position: "relative", zIndex: OPENROUTER_MODEL_PICKER_Z_INDEX + 1 }}>
 					<VSCodeOption value="openrouter">OpenRouter</VSCodeOption>
 					<VSCodeOption value="anthropic">Anthropic</VSCodeOption>
+					<VSCodeOption value="deepseek">DeepSeek</VSCodeOption>
 					<VSCodeOption value="gemini">Google Gemini</VSCodeOption>
 					<VSCodeOption value="vertex">GCP Vertex AI</VSCodeOption>
 					<VSCodeOption value="bedrock">AWS Bedrock</VSCodeOption>
@@ -183,6 +186,35 @@ const ApiOptions = ({ showModelOptions, apiErrorMessage, modelIdErrorMessage }: 
 								href="https://console.anthropic.com/settings/keys"
 								style={{ display: "inline", fontSize: "inherit" }}>
 								You can get an Anthropic API key by signing up here.
+							</VSCodeLink>
+						)}
+					</p>
+				</div>
+			)}
+
+			{selectedProvider === "deepseek" && (
+				<div>
+					<VSCodeTextField
+						value={apiConfiguration?.deepSeekApiKey || ""}
+						style={{ width: "100%" }}
+						type="password"
+						onInput={handleInputChange("deepSeekApiKey")}
+						placeholder="Enter API Key...">
+						<span style={{ fontWeight: 500 }}>DeepSeek API Key</span>
+					</VSCodeTextField>
+
+					<p
+						style={{
+							fontSize: "12px",
+							marginTop: 3,
+							color: "var(--vscode-descriptionForeground)",
+						}}>
+						This key is stored locally and only used to make API requests from this extension.
+						{!apiConfiguration?.deepSeekApiKey && (
+							<VSCodeLink
+								href="https://platform.deepseek.com"
+								style={{ display: "inline", fontSize: "inherit" }}>
+								You can get a DeepSeek API key by signing up here.
 							</VSCodeLink>
 						)}
 					</p>
@@ -632,6 +664,7 @@ const ApiOptions = ({ showModelOptions, apiErrorMessage, modelIdErrorMessage }: 
 							{selectedProvider === "vertex" && createDropdown(vertexModels)}
 							{selectedProvider === "gemini" && createDropdown(geminiModels)}
 							{selectedProvider === "openai-native" && createDropdown(openAiNativeModels)}
+							{selectedProvider === "deepseek" && createDropdown(deepSeekModels)}
 						</div>
 
 						<ModelInfoView
@@ -740,6 +773,12 @@ export const ModelInfoView = ({
 				tokens
 			</span>
 		),
+		selectedModelId === "deepseek-chat" && (
+			<span key="pricingTransition" style={{ color: "var(--vscode-charts-green)", fontStyle: "italic" }}>
+				<span style={{ fontWeight: 500 }}>Note:</span> Discounted pricing available until 2025-02-08 16:00 UTC.
+				After that, regular pricing will apply.
+			</span>
+		),
 		isGemini && (
 			<span key="geminiInfo" style={{ fontStyle: "italic" }}>
 				* Free up to {selectedModelId && selectedModelId.includes("flash") ? "15" : "2"} requests per minute.
@@ -818,6 +857,8 @@ export function normalizeApiConfiguration(apiConfiguration?: ApiConfiguration) {
 			return getProviderData(geminiModels, geminiDefaultModelId)
 		case "openai-native":
 			return getProviderData(openAiNativeModels, openAiNativeDefaultModelId)
+		case "deepseek":
+			return getProviderData(deepSeekModels, deepSeekDefaultModelId)
 		case "openrouter":
 			return {
 				selectedProvider: provider,
